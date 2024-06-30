@@ -1,33 +1,52 @@
-import { Injectable } from '@angular/core';
-import {WeatherService} from "./weather.service";
+import { Inject, Injectable, Signal, signal } from "@angular/core";
+import { BehaviorSubject } from "rxjs";
+import { WeatherService } from "./weather.service";
 
-export const LOCATIONS : string = "locations";
+export const LOCATIONS: string = "locations";
 
 @Injectable()
 export class LocationService {
+  private locationsSignal = signal<string[]>([]);
 
-  locations : string[] = [];
-
-  constructor(private weatherService : WeatherService) {
-    let locString = localStorage.getItem(LOCATIONS);
-    if (locString)
-      this.locations = JSON.parse(locString);
-    for (let loc of this.locations)
-      this.weatherService.addCurrentConditions(loc);
-  }
-
-  addLocation(zipcode : string) {
-    this.locations.push(zipcode);
-    localStorage.setItem(LOCATIONS, JSON.stringify(this.locations));
-    this.weatherService.addCurrentConditions(zipcode);
-  }
-
-  removeLocation(zipcode : string) {
-    let index = this.locations.indexOf(zipcode);
-    if (index !== -1){
-      this.locations.splice(index, 1);
-      localStorage.setItem(LOCATIONS, JSON.stringify(this.locations));
-      this.weatherService.removeCurrentConditions(zipcode);
+  constructor(@Inject(WeatherService) private weatherService: WeatherService) {
+    let locationsString = localStorage.getItem(LOCATIONS);
+    if (locationsString) {
+      const locations = JSON.parse(locationsString);
+      this.locationsSignal.set(locations);
     }
+  }
+
+  get locations(): Signal<string[]> {
+    return this.locationsSignal.asReadonly();
+  }
+
+  addLocation(zipcode: string) {
+    this.locationsSignal.update((locations) => {
+      if (locations.includes(zipcode)) {
+        alert("Location already exists");
+        return locations;
+      }
+      this.weatherService.addCurrentConditions(zipcode);
+      const newLocations = [...locations, zipcode];
+      this.updateLocalStorage(newLocations);
+      return newLocations;
+    });
+  }
+
+  removeLocation(zipcode: string) {
+    this.locationsSignal.update((locations) => {
+      const index = locations.indexOf(zipcode);
+      if (index !== -1) {
+        const newLocations = locations.filter((loc) => loc !== zipcode);
+        this.weatherService.removeCurrentConditions(zipcode);
+        this.updateLocalStorage(newLocations);
+        return newLocations;
+      }
+      return locations;
+    });
+  }
+
+  private updateLocalStorage(locations: string[]) {
+    localStorage.setItem(LOCATIONS, JSON.stringify(locations));
   }
 }

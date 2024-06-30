@@ -1,7 +1,8 @@
-.close {
-  cursor: pointer;
-}
 .flex {
   display: flex;
   justify-content: space-between;
+}
+
+.well {
+  margin-bottom: 0;
 }

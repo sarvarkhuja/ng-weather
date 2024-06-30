@@ -1,0 +1,23 @@
+<ul class="nav nav-tabs">
+  <li class="nav-item" *ngFor="let title of titles; index as i">
+    <a
+      class="nav-link"
+      [ngClass]="{ active: i === activeTabIndex }"
+      aria-current="page"
+      (click)="chooseTab(i)"
+    >
+      <ng-container *ngIf="isTitleString(title); else template">
+        {{ title }}
+      </ng-container>
+      <ng-template #template>
+        <ng-containter [ngTemplateOutlet]="title"></ng-containter>
+      </ng-template>
+      <span *ngIf="closable" (click)="close($event, i)" class="close"
+        >&times;</span
+      ></a
+    >
+  </li>
+</ul>
+<div class="tab-set">
+  <ng-content></ng-content>
+</div>
