@@ -1,24 +1,15 @@
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable, of } from "rxjs";
-import { tap } from "rxjs/operators";
+import { catchError, tap } from "rxjs/operators";
 import {
   ConditionsAndZip,
   ConditionsAndZipWithUpdatedDate,
-} from "./conditions-and-zip.type";
-import { CurrentConditions } from "./current-conditions/current-conditions.type";
-import {
-  Forecast,
-  ForecastWithUpdatedDate,
-} from "./forecasts-list/forecast.type";
+} from "../interfaces/conditions-and-zip.type";
+import { CurrentConditions } from "../interfaces/current-conditions.type";
+import { Forecast, ForecastWithUpdatedDate } from "../interfaces/forecast.type";
 import { Injectable, signal, Signal } from "@angular/core";
 
-const CACHE_DURATION = 1000; // 2 hours in milliseconds
-
-interface WeatherConfig {
-  API_URL: string;
-  APP_ID: string;
-  ICON_BASE_URL: string;
-}
+const CACHE_DURATION = 1000 * 60 * 60 * 2; // 2 hours in milliseconds
 
 @Injectable()
 export class WeatherService {
@@ -29,7 +20,7 @@ export class WeatherService {
       "https://raw.githubusercontent.com/udacity/Sunshine-Version-2/sunshine_master/app/src/main/res/drawable-hdpi/",
   };
 
-  private currentConditions = signal<ConditionsAndZip[]>([]);
+  public currentConditions = signal<ConditionsAndZip[]>([]);
 
   constructor(private http: HttpClient) {}
 
@@ -38,17 +29,16 @@ export class WeatherService {
     locations.forEach((loc) => this.addCurrentConditions(loc));
   }
 
-  addCurrentConditions(zipcode: string): void {
+  addCurrentConditions(zipcode: string): Observable<CurrentConditions> {
     if (this.getConditionsFromCache(zipcode)) return;
 
-    this.fetchCurrentConditions(zipcode).subscribe((data) => {
-      const conditionsAndZip = this.createConditionsAndZip(zipcode, data);
-      this.cacheConditions(zipcode, conditionsAndZip);
-      this.currentConditions.update((conditions) => [
-        ...conditions,
-        conditionsAndZip,
-      ]);
-    });
+    return this.fetchCurrentConditions(zipcode).pipe(
+      catchError((error) => {
+        console.error(error);
+        alert("Invalid zipcode");
+        return of(null); // Return an observable with a null value
+      })
+    );
   }
 
   removeCurrentConditions(zipcode: string): void {
@@ -74,7 +64,7 @@ export class WeatherService {
     const iconMap = {
       storm: [200, 232],
       rain: [501, 511],
-      lightRain: [500, 520, 531],
+      light_rain: [500, 520, 531],
       snow: [600, 622],
       clouds: [801, 804],
       fog: [741, 761],
@@ -146,7 +136,7 @@ export class WeatherService {
       .set("APPID", WeatherService.CONFIG.APP_ID);
   }
 
-  private createConditionsAndZip(
+  public createConditionsAndZip(
     zipcode: string,
     data: CurrentConditions
   ): ConditionsAndZipWithUpdatedDate {
@@ -157,7 +147,7 @@ export class WeatherService {
     };
   }
 
-  private cacheConditions(
+  public cacheConditions(
     zipcode: string,
     data: ConditionsAndZipWithUpdatedDate
   ): void {

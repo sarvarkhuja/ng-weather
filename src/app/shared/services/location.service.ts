@@ -26,7 +26,6 @@ export class LocationService {
         alert("Location already exists");
         return locations;
       }
-      this.weatherService.addCurrentConditions(zipcode);
       const newLocations = [...locations, zipcode];
       this.updateLocalStorage(newLocations);
       return newLocations;

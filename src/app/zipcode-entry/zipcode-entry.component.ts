@@ -1,15 +1,41 @@
-import { Component } from "@angular/core";
-import { LocationService } from "../location.service";
+import { Component, inject } from "@angular/core";
+import { LocationService } from "../shared/services/location.service";
+import { WeatherService } from "app/shared/services/weather.service";
+import { NgDestroy } from "app/shared/services/ng-destroy.service";
+import { takeUntil } from "rxjs/operators";
 
 @Component({
   selector: "app-zipcode-entry",
   templateUrl: "./zipcode-entry.component.html",
+  providers: [NgDestroy],
 })
 export class ZipcodeEntryComponent {
-  constructor(private service: LocationService) {}
+  private weatherService = inject(WeatherService);
+  private locationService = inject(LocationService);
+  private destroy$ = inject(NgDestroy);
 
   addLocation(zipcode: string) {
-    if (zipcode.length !== 5) return;
-    this.service.addLocation(zipcode);
+    if (zipcode.length !== 5) {
+      alert("Please enter a valid zipcode");
+      return;
+    }
+
+    this.weatherService
+      .addCurrentConditions(zipcode)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        if (data) {
+          this.locationService.addLocation(zipcode);
+          const conditionsAndZip = this.weatherService.createConditionsAndZip(
+            zipcode,
+            data
+          );
+          this.weatherService.cacheConditions(zipcode, conditionsAndZip);
+          this.weatherService.currentConditions.update((conditions) => [
+            ...conditions,
+            conditionsAndZip,
+          ]);
+        }
+      });
   }
 }

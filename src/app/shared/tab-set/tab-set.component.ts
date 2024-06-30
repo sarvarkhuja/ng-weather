@@ -61,6 +61,9 @@ export class TabSetComponent implements AfterContentChecked {
   get titles() {
     return this.tabs.map((tab) => tab.title);
   }
+  ngAfterContentChecked(): void {
+    this.treatActiveTab();
+  }
 
   private treatActiveTab() {
     this.tabs?.forEach((tab, index) => {
@@ -82,9 +85,5 @@ export class TabSetComponent implements AfterContentChecked {
 
   isTitleString(title: string | TemplateRef<any>): title is string {
     return typeof title === "string";
-  }
-
-  ngAfterContentChecked(): void {
-    this.treatActiveTab();
   }
 }
