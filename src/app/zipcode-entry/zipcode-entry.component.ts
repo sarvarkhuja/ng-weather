@@ -20,22 +20,19 @@ export class ZipcodeEntryComponent {
       return;
     }
 
-    this.weatherService
-      .addCurrentConditions(zipcode)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((data) => {
-        if (data) {
-          this.locationService.addLocation(zipcode);
-          const conditionsAndZip = this.weatherService.createConditionsAndZip(
-            zipcode,
-            data
-          );
-          this.weatherService.cacheConditions(zipcode, conditionsAndZip);
-          this.weatherService.currentConditions.update((conditions) => [
-            ...conditions,
-            conditionsAndZip,
-          ]);
-        }
-      });
+    this.weatherService.addCurrentConditions(zipcode).subscribe((data) => {
+      if (data) {
+        this.locationService.addLocation(zipcode);
+        const conditionsAndZip = this.weatherService.createConditionsAndZip(
+          zipcode,
+          data
+        );
+        this.weatherService.cacheConditions(zipcode, conditionsAndZip);
+        this.weatherService.currentConditions.update((conditions) => [
+          ...conditions,
+          conditionsAndZip,
+        ]);
+      }
+    });
   }
 }
