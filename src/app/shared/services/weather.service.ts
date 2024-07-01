@@ -1,16 +1,17 @@
-import { HttpClient, HttpParams } from "@angular/common/http";
+import { Injectable, Signal, signal } from "@angular/core";
 import { Observable, of } from "rxjs";
-import { catchError, tap } from "rxjs/operators";
+
+import { HttpClient, HttpParams } from "@angular/common/http";
+import { CurrentConditions } from "../interfaces/current-conditions.type";
+
+import { Forecast, ForecastWithUpdatedDate } from "../interfaces/forecast.type";
+import { map, tap } from "rxjs/operators";
 import {
   ConditionsAndZip,
   ConditionsAndZipWithUpdatedDate,
 } from "../interfaces/conditions-and-zip.type";
-import { CurrentConditions } from "../interfaces/current-conditions.type";
-import { Forecast, ForecastWithUpdatedDate } from "../interfaces/forecast.type";
-import { Injectable, signal, Signal } from "@angular/core";
 
-const CACHE_DURATION = 1000 * 60 * 60 * 2; // 2 hours in milliseconds
-
+export const DURATION_FOR_CACHE = 1000 * 60 * 60 * 2; // 2 hours
 @Injectable()
 export class WeatherService {
   private static CONFIG: WeatherConfig = {
@@ -20,47 +21,136 @@ export class WeatherService {
       "https://raw.githubusercontent.com/udacity/Sunshine-Version-2/sunshine_master/app/src/main/res/drawable-hdpi/",
   };
 
-  public currentConditions = signal<ConditionsAndZip[]>([]);
+  private currentConditions = signal<ConditionsAndZip[]>([]);
 
+  public getCurrentConditions(): Signal<ConditionsAndZip[]> {
+    return this.currentConditions.asReadonly();
+  }
   constructor(private http: HttpClient) {}
 
-  getAllCurrentConditions(locations: string[]): void {
-    this.currentConditions.set([]);
+  private concatPrefixAndZipcode(
+    zipcode: string,
+    prefix: "CurrentCondition-" | "Forecast-" = "CurrentCondition-"
+  ): string {
+    return prefix + zipcode;
+  }
+
+  private getForecastKey(zipcode: string) {
+    return this.concatPrefixAndZipcode(zipcode, "Forecast-");
+  }
+
+  private getCurrentConditionKey(zipcode: string) {
+    return this.concatPrefixAndZipcode(zipcode, "CurrentCondition-");
+  }
+
+  private getForecastOnCache(zipcode: string) {
+    const forecast: ForecastWithUpdatedDate | null = JSON.parse(
+      localStorage.getItem(this.getForecastKey(zipcode))
+    );
+    if (forecast && !this.isExpiredCacheData(forecast.updatedDate)) {
+      return forecast;
+    }
+    return null;
+  }
+  private isExpiredCacheData(updatedDate: string) {
+    const difference = new Date().getTime() - new Date(updatedDate).getTime();
+    return difference >= DURATION_FOR_CACHE;
+  }
+
+  public getAllCurrentConditions(locations: string[]): void {
+    this.clearCurrentConditions();
     locations.forEach((loc) => this.addCurrentConditions(loc));
   }
 
-  addCurrentConditions(zipcode: string): Observable<CurrentConditions> {
-    if (this.getConditionsFromCache(zipcode)) return;
+  private addCurrentConditions(zipcode: string): void {
+    if (this.getCachedCurrentCondition(zipcode)) return;
 
-    return this.fetchCurrentConditions(zipcode).pipe(
-      catchError((error) => {
-        console.error(error);
-        alert("Invalid zipcode");
-        return of(null); // Return an observable with a null value
+    const params = new HttpParams()
+      .set("zip", `${zipcode},us`)
+      .set("units", "imperial")
+      .set("APPID", WeatherService.CONFIG.APP_ID);
+
+    this.http
+      .get<CurrentConditions>(`${WeatherService.CONFIG.API_URL}/weather`, {
+        params,
       })
+      .pipe(
+        map((data) => ({
+          zip: zipcode,
+          data,
+          updatedDate: new Date().toLocaleString(),
+        }))
+      )
+      .subscribe((conditionsAndZip) => {
+        this.updateLocalStorage(zipcode, conditionsAndZip);
+        this.updateCurrentConditions(conditionsAndZip);
+      });
+  }
+
+  private clearCurrentConditions() {
+    this.currentConditions.set([]);
+  }
+
+  private getCachedCurrentCondition(
+    zipcode: string
+  ): ConditionsAndZipWithUpdatedDate | null {
+    const cachedData = localStorage.getItem(
+      this.getCurrentConditionKey(zipcode)
+    );
+    if (!cachedData) return null;
+
+    const parsedData: ConditionsAndZipWithUpdatedDate = JSON.parse(cachedData);
+    if (this.isExpiredCacheData(parsedData.updatedDate)) return null;
+
+    this.updateCurrentConditions(parsedData);
+    return parsedData;
+  }
+
+  private updateLocalStorage(
+    zipcode: string,
+    data: ConditionsAndZipWithUpdatedDate
+  ): void {
+    localStorage.setItem(
+      this.getCurrentConditionKey(zipcode),
+      JSON.stringify(data)
     );
   }
 
-  removeCurrentConditions(zipcode: string): void {
-    this.currentConditions.update((conditions) =>
-      conditions.filter((condition) => condition.zip !== zipcode)
-    );
+  private updateCurrentConditions(
+    newCondition: ConditionsAndZipWithUpdatedDate
+  ): void {
+    this.currentConditions.update((conditions) => [
+      ...conditions,
+      newCondition,
+    ]);
   }
 
-  getCurrentConditions(): Signal<ConditionsAndZip[]> {
-    return this.currentConditions.asReadonly();
+  public getForecast(zipcode: string): Observable<Forecast> {
+    const forecastOnCache = this.getForecastOnCache(zipcode);
+    if (forecastOnCache) return of(forecastOnCache);
+    const params = new HttpParams()
+      .set("zip", `${zipcode},us`)
+      .set("units", "imperial")
+      .set("cnt", "5")
+      .set("APPID", WeatherService.CONFIG.APP_ID);
+    return this.http
+      .get<Forecast>(`${WeatherService.CONFIG.API_URL}/forecast/daily`, {
+        params,
+      })
+      .pipe(
+        tap((data) => {
+          localStorage.setItem(
+            this.getForecastKey(zipcode),
+            JSON.stringify({
+              ...data,
+              updatedDate: new Date().toLocaleString(),
+            } as ForecastWithUpdatedDate)
+          );
+        })
+      );
   }
 
-  getForecast(zipcode: string): Observable<Forecast> {
-    const cachedForecast = this.getForecastFromCache(zipcode);
-    if (cachedForecast) return of(cachedForecast);
-
-    return this.fetchForecast(zipcode).pipe(
-      tap((data) => this.cacheForecast(zipcode, data))
-    );
-  }
-
-  getWeatherIcon(id: number): string {
+  public getWeatherIcon(id: number): string {
     const iconMap = {
       storm: [200, 232],
       rain: [501, 511],
@@ -77,102 +167,5 @@ export class WeatherService {
     }
 
     return `${WeatherService.CONFIG.ICON_BASE_URL}art_clear.png`;
-  }
-
-  private getConditionsFromCache(zipcode: string): boolean {
-    const key = this.getCacheKey(zipcode, "CurrentCondition");
-    const cachedData: ConditionsAndZipWithUpdatedDate | null = JSON.parse(
-      localStorage.getItem(key)
-    );
-
-    if (cachedData && !this.isCacheExpired(cachedData.updatedDate)) {
-      this.currentConditions.update((conditions) => [
-        ...conditions,
-        { ...cachedData },
-      ]);
-      return true;
-    }
-
-    return false;
-  }
-
-  private getForecastFromCache(
-    zipcode: string
-  ): ForecastWithUpdatedDate | null {
-    const key = this.getCacheKey(zipcode, "Forecast");
-    const cachedData: ForecastWithUpdatedDate | null = JSON.parse(
-      localStorage.getItem(key)
-    );
-
-    return cachedData && !this.isCacheExpired(cachedData.updatedDate)
-      ? cachedData
-      : null;
-  }
-
-  private fetchCurrentConditions(
-    zipcode: string
-  ): Observable<CurrentConditions> {
-    const params = this.getCommonParams(zipcode);
-
-    return this.http.get<CurrentConditions>(
-      `${WeatherService.CONFIG.API_URL}/weather`,
-      { params }
-    );
-  }
-
-  private fetchForecast(zipcode: string): Observable<Forecast> {
-    const params = this.getCommonParams(zipcode).set("cnt", "5");
-
-    return this.http.get<Forecast>(
-      `${WeatherService.CONFIG.API_URL}/forecast/daily`,
-      { params }
-    );
-  }
-
-  private getCommonParams(zipcode: string): HttpParams {
-    return new HttpParams()
-      .set("zip", `${zipcode},us`)
-      .set("units", "imperial")
-      .set("APPID", WeatherService.CONFIG.APP_ID);
-  }
-
-  public createConditionsAndZip(
-    zipcode: string,
-    data: CurrentConditions
-  ): ConditionsAndZipWithUpdatedDate {
-    return {
-      zip: zipcode,
-      data,
-      updatedDate: new Date().toLocaleString(),
-    };
-  }
-
-  public cacheConditions(
-    zipcode: string,
-    data: ConditionsAndZipWithUpdatedDate
-  ): void {
-    const key = this.getCacheKey(zipcode, "CurrentCondition");
-    localStorage.setItem(key, JSON.stringify(data));
-  }
-
-  private cacheForecast(zipcode: string, data: Forecast): void {
-    const key = this.getCacheKey(zipcode, "Forecast");
-    const dataWithTimestamp: ForecastWithUpdatedDate = {
-      ...data,
-      updatedDate: new Date().toLocaleString(),
-    };
-    localStorage.setItem(key, JSON.stringify(dataWithTimestamp));
-  }
-
-  private getCacheKey(
-    zipcode: string,
-    prefix: "CurrentCondition" | "Forecast"
-  ): string {
-    return `${prefix}-${zipcode}`;
-  }
-
-  private isCacheExpired(updatedDate: string): boolean {
-    const difference = new Date().getTime() - new Date(updatedDate).getTime();
-    return difference >= CACHE_DURATION;
   }
 }

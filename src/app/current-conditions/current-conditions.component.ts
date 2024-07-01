@@ -2,9 +2,9 @@ import { Component, inject, OnInit, Signal } from "@angular/core";
 import { WeatherService } from "../shared/services/weather.service";
 import { LocationService } from "../shared/services/location.service";
 import { Router } from "@angular/router";
-import { ConditionsAndZip } from "../shared/interfaces/conditions-and-zip.type";
-import { NgDestroy } from "app/shared/services/ng-destroy.service";
 import { takeUntil } from "rxjs/operators";
+import { ConditionsAndZip } from "app/shared/interfaces/conditions-and-zip.type";
+import { NgDestroy } from "app/shared/services/ng-destroy.service";
 
 const ACTIVE_TAB_INDEX = "activeTabIndex";
 
@@ -17,8 +17,9 @@ const ACTIVE_TAB_INDEX = "activeTabIndex";
 export class CurrentConditionsComponent implements OnInit {
   private weatherService = inject(WeatherService);
   private router = inject(Router);
-
   protected locationService = inject(LocationService);
+  private destroy$ = inject(NgDestroy);
+  
   protected currentConditionsByZip: Signal<ConditionsAndZip[]> =
     this.weatherService.getCurrentConditions();
 
@@ -35,9 +36,11 @@ export class CurrentConditionsComponent implements OnInit {
   }
 
   private listenLocationsChange() {
-    this.weatherService.getAllCurrentConditions(
-      this.locationService.locations()
-    );
+    this.locationService.locations$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((locations) => {
+        this.weatherService.getAllCurrentConditions(locations);
+      });
   }
 
   showForecast(zipcode: string) {

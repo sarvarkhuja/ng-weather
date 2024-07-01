@@ -1,51 +1,37 @@
-import { Inject, Injectable, Signal, signal } from "@angular/core";
+import { Injectable } from "@angular/core";
 import { BehaviorSubject } from "rxjs";
-import { WeatherService } from "./weather.service";
 
 export const LOCATIONS: string = "locations";
 
 @Injectable()
 export class LocationService {
-  private locationsSignal = signal<string[]>([]);
+  locations: string[] = [];
+  locations$ = new BehaviorSubject<string[]>(this.locations);
 
-  constructor(@Inject(WeatherService) private weatherService: WeatherService) {
+  constructor() {
     let locationsString = localStorage.getItem(LOCATIONS);
     if (locationsString) {
-      const locations = JSON.parse(locationsString);
-      this.locationsSignal.set(locations);
+      this.locations = JSON.parse(locationsString);
+      this.locations$.next(this.locations);
     }
   }
 
-  get locations(): Signal<string[]> {
-    return this.locationsSignal.asReadonly();
-  }
-
   addLocation(zipcode: string) {
-    this.locationsSignal.update((locations) => {
-      if (locations.includes(zipcode)) {
-        alert("Location already exists");
-        return locations;
-      }
-      const newLocations = [...locations, zipcode];
-      this.updateLocalStorage(newLocations);
-      return newLocations;
-    });
+    if (this.locations.indexOf(zipcode) !== -1) {
+      alert("Location already exists");
+      return;
+    }
+    this.locations.push(zipcode);
+    localStorage.setItem(LOCATIONS, JSON.stringify(this.locations));
+    this.locations$.next(this.locations);
   }
 
   removeLocation(zipcode: string) {
-    this.locationsSignal.update((locations) => {
-      const index = locations.indexOf(zipcode);
-      if (index !== -1) {
-        const newLocations = locations.filter((loc) => loc !== zipcode);
-        this.weatherService.removeCurrentConditions(zipcode);
-        this.updateLocalStorage(newLocations);
-        return newLocations;
-      }
-      return locations;
-    });
-  }
-
-  private updateLocalStorage(locations: string[]) {
-    localStorage.setItem(LOCATIONS, JSON.stringify(locations));
+    let index = this.locations.indexOf(zipcode);
+    if (index !== -1) {
+      this.locations.splice(index, 1);
+      localStorage.setItem(LOCATIONS, JSON.stringify(this.locations));
+      this.locations$.next(this.locations);
+    }
   }
 }
