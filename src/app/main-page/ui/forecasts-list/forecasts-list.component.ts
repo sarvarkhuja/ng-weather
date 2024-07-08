@@ -1,8 +1,8 @@
 import { Component, Inject } from "@angular/core";
-import { WeatherService } from "../shared/services/weather.service";
 import { ActivatedRoute } from "@angular/router";
-import { Forecast } from "../shared/interfaces/forecast.type";
+import { Forecast } from "app/shared/interfaces/forecast.type";
 import { NgDestroy } from "app/shared/services/ng-destroy.service";
+import { WeatherService } from "app/shared/services/weather.service";
 import { pipe } from "rxjs";
 import { takeUntil } from "rxjs/operators";
 

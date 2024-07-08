@@ -1,10 +1,10 @@
 import { Component, inject, OnInit, Signal } from "@angular/core";
-import { WeatherService } from "../shared/services/weather.service";
-import { LocationService } from "../shared/services/location.service";
 import { Router } from "@angular/router";
 import { takeUntil } from "rxjs/operators";
 import { ConditionsAndZip } from "app/shared/interfaces/conditions-and-zip.type";
 import { NgDestroy } from "app/shared/services/ng-destroy.service";
+import { LocationService } from "app/shared/services/location.service";
+import { WeatherService } from "app/shared/services/weather.service";
 
 const ACTIVE_TAB_INDEX = "activeTabIndex";
 
