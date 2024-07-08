@@ -5,7 +5,7 @@ import { HttpClient, HttpParams } from "@angular/common/http";
 import { CurrentConditions } from "../interfaces/current-conditions.type";
 
 import { Forecast, ForecastWithUpdatedDate } from "../interfaces/forecast.type";
-import { map, tap } from "rxjs/operators";
+import { catchError, map, tap } from "rxjs/operators";
 import {
   ConditionsAndZip,
   ConditionsAndZipWithUpdatedDate,
@@ -30,38 +30,28 @@ export class WeatherService {
 
   private concatPrefixAndZipcode(
     zipcode: string,
-    prefix: "CurrentCondition-" | "Forecast-" = "CurrentCondition-"
+    prefix: "CURRENT_CONDITION-" | "FORECAST-" = "CURRENT_CONDITION-"
   ): string {
     return prefix + zipcode;
   }
 
   private getForecastKey(zipcode: string) {
-    return this.concatPrefixAndZipcode(zipcode, "Forecast-");
+    return this.concatPrefixAndZipcode(zipcode, "FORECAST-");
   }
 
   private getCurrentConditionKey(zipcode: string) {
-    return this.concatPrefixAndZipcode(zipcode, "CurrentCondition-");
-  }
-
-  private getForecastOnCache(zipcode: string) {
-    const forecast: ForecastWithUpdatedDate | null = JSON.parse(
-      localStorage.getItem(this.getForecastKey(zipcode))
-    );
-    if (forecast && !this.isExpiredCacheData(forecast.updatedDate)) {
-      return forecast;
-    }
-    return null;
-  }
-  private isExpiredCacheData(updatedDate: string) {
-    const difference = new Date().getTime() - new Date(updatedDate).getTime();
-    return difference >= DURATION_FOR_CACHE;
+    return this.concatPrefixAndZipcode(zipcode, "CURRENT_CONDITION-");
   }
 
   public getAllCurrentConditions(locations: string[]): void {
-    this.clearCurrentConditions();
     locations.forEach((loc) => this.addCurrentConditions(loc));
   }
 
+  /**
+   * Add current conditions
+   * @param zipcode
+   * @returns
+   */
   private addCurrentConditions(zipcode: string): void {
     if (this.getCachedCurrentCondition(zipcode)) return;
 
@@ -79,7 +69,11 @@ export class WeatherService {
           zip: zipcode,
           data,
           updatedDate: new Date().toLocaleString(),
-        }))
+        })),
+        catchError((error) => {
+          alert("Invalid Zipcode");
+          return of(null);
+        })
       )
       .subscribe((conditionsAndZip) => {
         this.updateLocalStorage(zipcode, conditionsAndZip);
@@ -87,10 +81,11 @@ export class WeatherService {
       });
   }
 
-  private clearCurrentConditions() {
-    this.currentConditions.set([]);
-  }
-
+  /**
+   *  Get cached current condition
+   * @param zipcode
+   * @returns
+   */
   private getCachedCurrentCondition(
     zipcode: string
   ): ConditionsAndZipWithUpdatedDate | null {
@@ -116,6 +111,10 @@ export class WeatherService {
     );
   }
 
+  /**
+   *
+   * @param newCondition
+   */
   private updateCurrentConditions(
     newCondition: ConditionsAndZipWithUpdatedDate
   ): void {
@@ -125,6 +124,11 @@ export class WeatherService {
     ]);
   }
 
+  /**
+   *  Get forecast
+   * @param zipcode
+   * @returns
+   */
   public getForecast(zipcode: string): Observable<Forecast> {
     const forecastOnCache = this.getForecastOnCache(zipcode);
     if (forecastOnCache) return of(forecastOnCache);
@@ -150,6 +154,43 @@ export class WeatherService {
       );
   }
 
+  /**
+   *  Get forecast on cache
+   * @param zipcode
+   * @returns
+   */
+  private getForecastOnCache(zipcode: string) {
+    const forecast: ForecastWithUpdatedDate | null = JSON.parse(
+      localStorage.getItem(this.getForecastKey(zipcode))
+    );
+    if (forecast && !this.isExpiredCacheData(forecast.updatedDate)) {
+      return forecast;
+    }
+    return null;
+  }
+
+  /**
+   *  Check if the cache data is expired
+   * @param updatedDate
+   * @returns
+   */
+  private isExpiredCacheData(updatedDate: string) {
+    const difference = new Date().getTime() - new Date(updatedDate).getTime();
+    return difference >= DURATION_FOR_CACHE;
+  }
+
+  /**
+   *  Clear current conditions
+   */
+  public clearCurrentConditions() {
+    this.currentConditions.set([]);
+  }
+
+  /**
+   *  Get weather icon
+   * @param id
+   * @returns
+   */
   public getWeatherIcon(id: number): string {
     const iconMap = {
       storm: [200, 232],

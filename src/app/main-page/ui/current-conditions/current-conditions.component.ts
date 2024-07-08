@@ -17,17 +17,25 @@ const ACTIVE_TAB_INDEX = "activeTabIndex";
 export class CurrentConditionsComponent implements OnInit {
   private weatherService = inject(WeatherService);
   private router = inject(Router);
-  protected locationService = inject(LocationService);
+  private locationService = inject(LocationService);
   private destroy$ = inject(NgDestroy);
   
   protected currentConditionsByZip: Signal<ConditionsAndZip[]> =
     this.weatherService.getCurrentConditions();
 
-  public get activeTabIndex(): number {
+  /**
+   * Get the active tab index from the local storage
+   * @returns activeTabIndex
+   */ 
+  get activeTabIndex(): number {
     const activeTabIndex = +localStorage.getItem(ACTIVE_TAB_INDEX);
     return activeTabIndex;
   }
-  public set activeTabIndex(v: number) {
+
+  /**
+   * Set the active tab index in the local storage
+   */
+  set activeTabIndex(v: number) {
     localStorage.setItem(ACTIVE_TAB_INDEX, v.toString());
   }
 
@@ -39,6 +47,7 @@ export class CurrentConditionsComponent implements OnInit {
     this.locationService.locations$
       .pipe(takeUntil(this.destroy$))
       .subscribe((locations) => {
+        this.weatherService.clearCurrentConditions();
         this.weatherService.getAllCurrentConditions(locations);
       });
   }
@@ -46,8 +55,11 @@ export class CurrentConditionsComponent implements OnInit {
   showForecast(zipcode: string) {
     this.router.navigate(["/forecast", zipcode]);
   }
+  updateActiveTabIndex(index: number) {
+    this.activeTabIndex = index;
+  }
 
-  removeCondition(index: number) {
+  removeListItem(index: number) {
     const zipcode = this.currentConditionsByZip()[index].zip;
     this.locationService.removeLocation(zipcode);
     if (index < this.activeTabIndex) this.activeTabIndex--;

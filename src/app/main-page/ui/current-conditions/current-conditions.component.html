@@ -1,9 +1,10 @@
 <!-- AN EXAMPLE FOR USING GENERIC TAB -->
 
 <tab-set
-  [(activeTabIndex)]="activeTabIndex"
+  [activeTabIndex]="activeTabIndex"
   [closable]="true"
-  (closeTab)="removeCondition($event)"
+  (activeTabIndexChange)="updateActiveTabIndex($event)"
+  (closeTab)="removeListItem($event)"
 >
   <tab
     *ngFor="let location of currentConditionsByZip()"
